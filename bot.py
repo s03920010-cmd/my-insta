@@ -6,8 +6,8 @@ from instagrapi import Client
 from instagrapi.exceptions import LoginRequired, ChallengeRequired
 
 # ================== تنظیمات ==================
-USERNAME = "your_username"          # یوزرنیم اینستا
-PASSWORD = "your_password"          # فقط برای اولین لاگین
+USERNAME = "radvinhsa"          # یوزرنیم اینستا
+PASSWORD = "Radvin.1392"          # فقط برای اولین لاگین
 SESSION_FILE = "session.json"
 VIDEOS_FILE = "videos.txt"
 STATE_FILE = "state.json"
