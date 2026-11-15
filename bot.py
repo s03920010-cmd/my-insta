@@ -6,7 +6,7 @@ from urllib.parse import unquote
 from instagrapi import Client
 
 # ================== تنظیمات ==================
-SESSIONID = "16096182361%3AmfLwy6lPFVrwzK%3A14%3AAYmLje3-jYRVorJ_FxQpfABU4ty8tCxgFS8pCzVqGg"
+SESSIONID = "16096182361%3AmfLwy6lPFVrwzK%3A14%3AAYnLnBY1xkS_PgO67JaPBt8yFQa2HGAqrAiUTj6P3A"
 
 VIDEOS_FILE = "videos.txt"
 STATE_FILE = "state.json"
