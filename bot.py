@@ -2,17 +2,19 @@ import json
 import os
 import time
 from pathlib import Path
+from urllib.parse import unquote
 from instagrapi import Client
-from instagrapi.exceptions import LoginRequired, ChallengeRequired
 
 # ================== تنظیمات ==================
-USERNAME = "radvinhsa"          # یوزرنیم اینستا
-PASSWORD = "Radvin.1392"          # فقط برای اولین لاگین
-SESSION_FILE = "session.json"
+# این sessionid رو از مرورگر گرفتی
+SESSIONID = "16096182361%3AmfLwy6lPFVrwzK%3A14%3AAYmLje3-jYRVorJ_FxQpfABU4ty8tCxgFS8pCzVqGg"
+
 VIDEOS_FILE = "videos.txt"
 STATE_FILE = "state.json"
 DOWNLOAD_FOLDER = Path("downloaded_videos")
+SESSION_FILE = "session.json"
 # ============================================
+
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -20,9 +22,11 @@ def load_state():
             return json.load(f)
     return {"index": 0, "posted": []}
 
+
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+
 
 def load_videos():
     if not os.path.exists(VIDEOS_FILE):
@@ -32,32 +36,36 @@ def load_videos():
         urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
     return urls
 
+
 def login():
     cl = Client()
-    cl.delay_range = [1, 3]  # کمی تأخیر برای کاهش ریسک
+    cl.delay_range = [2, 5]
 
+    # اول سعی می‌کنه از فایل session.json بخونه (بهترین حالت)
     if os.path.exists(SESSION_FILE):
         try:
+            print("در حال لود سشن از فایل session.json ...")
             cl.load_settings(SESSION_FILE)
-            cl.login(USERNAME, PASSWORD)  # فقط برای چک کردن سشن
-            cl.get_timeline_feed()  # تست لاگین
-            print("✅ لاگین با سشن موفق بود")
+            cl.get_timeline_feed()
+            user = cl.account_info()
+            print(f"✅ لاگین با سشن موفق بود → {user.username}")
             return cl
         except Exception as e:
-            print(f"⚠ سشن منقضی شده، دوباره لاگین می‌کنم... ({e})")
+            print(f"⚠ سشن فایل خراب یا منقضی شده: {e}")
 
-    # لاگین اولیه
+    # اگر فایل نبود، با sessionid لاگین می‌کنه
     try:
-        cl.login(USERNAME, PASSWORD)
-        cl.dump_settings(SESSION_FILE)
-        print("✅ لاگین موفق + سشن ذخیره شد")
+        print("در حال لاگین با sessionid ...")
+        sid = unquote(SESSIONID)
+        cl.login_by_sessionid(sid)
+        cl.dump_settings(SESSION_FILE)  # سشن رو ذخیره می‌کنه برای دفعات بعد
+        user = cl.account_info()
+        print(f"✅ لاگین با sessionid موفق بود → {user.username}")
         return cl
-    except ChallengeRequired:
-        print("❌ اینستاگرام چالش (کد تأیید) خواسته. دستی لاگین کن و سشن رو ذخیره کن.")
-        raise
     except Exception as e:
-        print(f"❌ خطا در لاگین: {e}")
+        print(f"❌ خطا در لاگین با sessionid: {e}")
         raise
+
 
 def post_one_story(cl, url, index):
     print(f"\n📥 در حال پردازش ویدیو شماره {index + 1}: {url}")
@@ -66,11 +74,10 @@ def post_one_story(cl, url, index):
         media_pk = cl.media_pk_from_url(url)
         media = cl.media_info(media_pk)
 
-        # فقط ویدیو/ریلز رو قبول کن
-        if media.media_type not in [2, 8]:  # 2 = video, 8 = album
-            if not getattr(media, "video_url", None):
-                print("⚠ این پست ویدیو نداره، رد می‌شه")
-                return False
+        # فقط ویدیو رو قبول می‌کنه
+        if media.media_type not in [2, 8] and not getattr(media, "video_url", None):
+            print("⚠ این پست ویدیو نداره، رد می‌شه")
+            return False
 
         DOWNLOAD_FOLDER.mkdir(exist_ok=True)
         video_path = cl.video_download(media_pk, folder=DOWNLOAD_FOLDER)
@@ -80,7 +87,7 @@ def post_one_story(cl, url, index):
         story = cl.video_upload_to_story(video_path)
         print(f"✅ استوری پست شد! Story ID: {story.pk}")
 
-        # پاک کردن فایل دانلود شده (اختیاری)
+        # پاک کردن فایل موقت
         try:
             os.remove(video_path)
         except Exception:
@@ -92,15 +99,16 @@ def post_one_story(cl, url, index):
         print(f"❌ خطا در پردازش این ویدیو: {e}")
         return False
 
+
 def main():
-    print("=" * 50)
-    print("Instagram Daily Story from Reposts Bot")
+    print("=" * 55)
+    print("Instagram Daily Story Bot (Railway Version)")
     print("ریسک بن شدن وجود دارد - با مسئولیت خودت استفاده کن")
-    print("=" * 50)
+    print("=" * 55)
 
     videos = load_videos()
     if not videos:
-        print("لیست ویدیو خالیه. فایل videos.txt رو پر کن.")
+        print("لیست ویدیو خالیه. فایل videos.txt رو چک کن.")
         return
 
     state = load_state()
@@ -124,7 +132,8 @@ def main():
         save_state(state)
         print(f"\n🎯 پیشرفت: {state['index']} از {len(videos)}")
     else:
-        print("\n⚠ این ویدیو پست نشد. ایندکس جلو نرفت تا دوباره امتحان کنی.")
+        print("\n⚠ این ویدیو پست نشد. ایندکس جلو نرفت.")
+
 
 if __name__ == "__main__":
     main()
