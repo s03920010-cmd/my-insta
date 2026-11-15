@@ -6,7 +6,6 @@ from urllib.parse import unquote
 from instagrapi import Client
 
 # ================== تنظیمات ==================
-# این sessionid رو از مرورگر گرفتی
 SESSIONID = "16096182361%3AmfLwy6lPFVrwzK%3A14%3AAYmLje3-jYRVorJ_FxQpfABU4ty8tCxgFS8pCzVqGg"
 
 VIDEOS_FILE = "videos.txt"
@@ -41,7 +40,6 @@ def login():
     cl = Client()
     cl.delay_range = [2, 5]
 
-    # اول سعی می‌کنه از فایل session.json بخونه (بهترین حالت)
     if os.path.exists(SESSION_FILE):
         try:
             print("در حال لود سشن از فایل session.json ...")
@@ -53,18 +51,34 @@ def login():
         except Exception as e:
             print(f"⚠ سشن فایل خراب یا منقضی شده: {e}")
 
-    # اگر فایل نبود، با sessionid لاگین می‌کنه
     try:
         print("در حال لاگین با sessionid ...")
         sid = unquote(SESSIONID)
         cl.login_by_sessionid(sid)
-        cl.dump_settings(SESSION_FILE)  # سشن رو ذخیره می‌کنه برای دفعات بعد
+        cl.dump_settings(SESSION_FILE)
         user = cl.account_info()
         print(f"✅ لاگین با sessionid موفق بود → {user.username}")
         return cl
     except Exception as e:
         print(f"❌ خطا در لاگین با sessionid: {e}")
         raise
+
+
+def make_thumbnail(video_path: Path) -> Path:
+    """سعی می‌کند با moviepy یک thumbnail بسازد"""
+    thumb_path = video_path.with_suffix(".jpg")
+    try:
+        from moviepy import VideoFileClip
+        clip = VideoFileClip(str(video_path))
+        # فریم وسط ویدیو را می‌گیریم
+        t = min(1.0, clip.duration / 2)
+        clip.save_frame(str(thumb_path), t=t)
+        clip.close()
+        print(f"✅ thumbnail ساخته شد: {thumb_path}")
+        return thumb_path
+    except Exception as e:
+        print(f"⚠ نتوانست thumbnail بسازد: {e}")
+        return None
 
 
 def post_one_story(cl, url, index):
@@ -74,7 +88,6 @@ def post_one_story(cl, url, index):
         media_pk = cl.media_pk_from_url(url)
         media = cl.media_info(media_pk)
 
-        # فقط ویدیو رو قبول می‌کنه
         if media.media_type not in [2, 8] and not getattr(media, "video_url", None):
             print("⚠ این پست ویدیو نداره، رد می‌شه")
             return False
@@ -83,15 +96,24 @@ def post_one_story(cl, url, index):
         video_path = cl.video_download(media_pk, folder=DOWNLOAD_FOLDER)
         print(f"✅ دانلود شد: {video_path}")
 
+        # ساخت thumbnail
+        thumb_path = make_thumbnail(Path(video_path))
+
         # آپلود به استوری
-        story = cl.video_upload_to_story(video_path)
+        if thumb_path and thumb_path.exists():
+            story = cl.video_upload_to_story(video_path, thumbnail=thumb_path)
+        else:
+            story = cl.video_upload_to_story(video_path)
+
         print(f"✅ استوری پست شد! Story ID: {story.pk}")
 
-        # پاک کردن فایل موقت
-        try:
-            os.remove(video_path)
-        except Exception:
-            pass
+        # پاک کردن فایل‌های موقت
+        for f in [video_path, thumb_path]:
+            try:
+                if f and Path(f).exists():
+                    os.remove(f)
+            except Exception:
+                pass
 
         return True
 
